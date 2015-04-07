@@ -5,7 +5,7 @@ This is a simple addon for the Easy Digital Downloads Wordpress plugin to use th
 
 ### Settings
 
-In the plugin settings, enter the Mollie API test- and production keys and you're good to go.
+In the Easy Digital downloads payment gateway settings, enter the Mollie API test- and production keys and you're good to go.
 
 ### To do
 
