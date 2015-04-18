@@ -126,7 +126,7 @@ if (! function_exists('gateway_mollie_payment_processing')) {
                 // Create webhook URL for Mollie. This way the client doesn't need to 
                 // set a webhook URL in Mollie website profile
                 $base_url = get_site_url();
-                $webhookUrl = $base_url . '?edd-listener=MOLLIE';
+                $webhookUrl = $base_url . '/?edd-listener=MOLLIE';
 
                 $payment = $mollie->payments->create(array(
                 'amount' => $purchase_data['price'],
