@@ -95,12 +95,6 @@ if(!function_exists(mollieApiConnect)) {
 
         require_once 'Mollie/API/Autoloader.php';
 
-        if (!isset($edd_options['mollie_live_api_key'])) {
-            $edd_options['mollie_live_api_key'] = 'live_h9b0b5XjCh9dneJArJ6e5VUPSN94aI';
-        }
-        if (!isset($edd_options['mollie_test_api_key'])) {
-            $edd_options['mollie_test_api_key'] = 'test_AANaktwcJV3vqANWz29RtEKdoWKrpI';
-        }
         if (NULL !== $edd_options['mollie_test_api_key'] && NULL !== $edd_options['mollie_live_api_key']) {
             $mollie = NULL;
             if (edd_is_test_mode()) {
