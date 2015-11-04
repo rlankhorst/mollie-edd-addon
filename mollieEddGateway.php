@@ -3,7 +3,7 @@
 Plugin Name: Easy Digital Downloads - Mollie Gateway
 Plugin URL: http://www.degrinthorst.nl/edd-mollie-plugin
 Description: A simple Mollie payment gateway addon for Easy Digital Downloads Wordpress plugin
-Version: 1.0
+Version: 1.1
 Author: Sander de Wijs
 Author URI: http://www.degrinthorst.nl
 */
