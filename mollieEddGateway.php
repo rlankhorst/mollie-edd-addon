@@ -37,6 +37,31 @@ function sw_edd_mollie_gateway_cc_form()
 }
 add_action('edd_mollie_gateway_cc_form', 'sw_edd_mollie_gateway_cc_form');
 
+function mollie_api_connect() {
+    global $edd_options;
+    $mollie = '';
+    try {
+        $mollie_test_api = $edd_options['test_api_key'];
+        $mollie_live_api = $edd_options['live_api_key'];
+
+        // Load Mollie API with autoloader
+
+        require ('Mollie/API/Autoloader.php');
+
+        $mollie = new Mollie_API_Client;
+
+        // Check if test mode is set to determine what API Key to use for payment object.
+        if (edd_is_test_mode()) {
+            $mollie->setApiKey($mollie_test_api);
+        } else {
+            $mollie->setApiKey($mollie_live_api);
+        }
+    } catch (Mollie_API_Exception $e) {
+            echo "API call failed: " . htmlspecialchars($e->getMessage());
+    }
+    return $mollie;
+}
+
 /**
  * Add an IDEAL icon for the EDD settings screen
  *
@@ -91,7 +116,7 @@ if (! function_exists('gateway_mollie_payment_processing')) {
         // Check if payment is EDD payment
         if (! $edd_payment) {
         // Record the error
-            edd_record_gateway_error(__('Payment Error', 'edd'), sprintf(__('Payment creation failed before sending buyer to IDEAL. Payment data: %s', 'edd'), json_encode($payment)), $payment);
+            edd_record_gateway_error(__('Payment Error', 'edd'), sprintf(__('Payment creation failed before sending buyer to IDEAL. Payment data: %s', 'edd'), json_encode($edd_payment)), $edd_payment);
         // Problems? send back to checkout
             edd_send_back_to_checkout('?payment-mode=' . $purchase_data['post_data']['edd-gateway']);
         }  else {
@@ -130,7 +155,6 @@ if (! function_exists('gateway_mollie_payment_processing')) {
                 $payment = $mollie->payments->create(array(
                 'amount' => $purchase_data['price'],
                 'description' => $cart_summary,
-                'method' => 'ideal',
                 'redirectUrl' => $return_url,
                 'webhookUrl' => $webhookUrl,
                 'metadata' => array(
@@ -213,6 +237,7 @@ function check_for_mollie_payments() {
         return;
     }
     $id = $_GET["payment-id"];
+
     $params = array(
         'payment-notification'  => $_GET["payment-notification"],
         'payment-id'            => $_GET["payment-id"]
@@ -233,6 +258,10 @@ add_action('init', 'check_for_mollie_payments');
 function mollie_payments_redirect($params)
 {
     global $edd_options;
+    $mollie_trans_id = '';
+    $mollie = '';
+    $payment = '';
+    $paid = false;
 
     if(!is_array($params)) {
         return;
@@ -244,14 +273,23 @@ function mollie_payments_redirect($params)
     $mollie_payment_id = $params['payment-id'];
 
     $status = get_post_status($mollie_payment_id);
-    if($status === false) {
-        return;
+    $mollie_trans_id = edd_get_payment_transaction_id($mollie_payment_id);
+    $mollie = mollie_api_connect();
+    try {
+        $payment = $mollie->payments->get($mollie_trans_id);
+        if($payment->isPaid()) {
+            edd_send_to_success_page();
+        } elseif($payment->isOpen()) {
+            edd_send_to_failed_page();
+        } elseif($payment->isCancelled()) {
+            edd_send_to_failed_page();
+        } else {
+            edd_send_to_failed_page();
+        }
+    } catch (Mollie_API_Exception $e) {
+        echo "API call failed: " . htmlspecialchars($e->getMessage());
     }
-    if ($status == 'complete' || $status == 'publish') {
-        edd_send_to_success_page();
-    } else {
-        edd_send_to_failed_page();
-    }
+
 }
 
 /**
@@ -307,12 +345,12 @@ function sw_edd_process_mollie_ipn()
         if ($payment->isPaid()) {
             // If payment status is Paid, complete the order  
             edd_update_payment_status($order_id, $new_status = 'publish');
-            header("HTTP/1.0 200 Ok");
+            // header("HTTP/1.0 200 Ok");
         } elseif ($payment->isOpen()) {
             // If payment status is Open, set the order status to failed  
-            edd_record_gateway_error( 
-                'Payment Not Paid', 
-                sprintf( __( 'A payment was not processed: ', 'edd' ), json_encode( $payment ) ) 
+            edd_record_gateway_error(
+                'Payment Not Paid',
+                sprintf( __( 'A payment was not processed: ', 'edd' ), json_encode( $payment ) )
             );
             edd_update_payment_status($order_id, $new_status = 'failed');
         } elseif ($payment->isCancelled()) {
