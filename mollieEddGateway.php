@@ -130,23 +130,8 @@ if (! function_exists('gateway_mollie_payment_processing')) {
                 ), $home_url);
 
             // Create a Mollie Payment object
+                $mollie = mollie_api_connect();
             try {
-                $mollie_test_api = $edd_options['test_api_key'];
-                $mollie_live_api = $edd_options['live_api_key'];
-
-                // Load Mollie API with autoloader
-
-                require ('Mollie/API/Autoloader.php');
-
-                $mollie = new Mollie_API_Client;
-
-                // Check if test mode is set to determine what API Key to use for payment object.
-                if (edd_is_test_mode()) {
-                    $mollie->setApiKey($mollie_test_api);
-                } else {
-                    $mollie->setApiKey($mollie_live_api);
-                }
-
                 // Create webhook URL for Mollie. This way the client doesn't need to
                 // set a webhook URL in Mollie website profile
                 $base_url = get_site_url();
@@ -308,22 +293,7 @@ function sw_edd_process_mollie_ipn()
 {
     global $edd_options;
 
-    try {
-
-        $mollie_test_api = $edd_options['test_api_key'];
-        $mollie_live_api = $edd_options['live_api_key'];
-
-    // Load Mollie API with autoloader
-
-        require ('Mollie/API/Autoloader.php');
-
-        $mollie = new Mollie_API_Client;
-        $payment = "";
-        $id = $_POST["id"];
-
-    } catch (Mollie_API_Exception $e) {
-            echo "API call failed: " . htmlspecialchars($e->getMessage());
-    }
+    $mollie = mollie_api_connect();
     try {
 
         //Check if test mode is set to determine what API Key to use for Mollie API call.
