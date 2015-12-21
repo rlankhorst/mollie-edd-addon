@@ -15,6 +15,10 @@ Author URI: http://www.degrinthorst.nl
  * @param $gateways Array Array of gateways registered in EDD
  * @return $gateways Array updated gateways array
  */
+
+require('inc/class_edd_mollie_plugin.php');
+require('inc/mollie-edd-functions.php');
+
 function sw_edd_register_gateway($gateways)
 {
     $gateways['mollie_gateway'] = array(
@@ -36,31 +40,6 @@ function sw_edd_mollie_gateway_cc_form()
     return;
 }
 add_action('edd_mollie_gateway_cc_form', 'sw_edd_mollie_gateway_cc_form');
-
-function mollie_api_connect() {
-    global $edd_options;
-    $mollie = '';
-    try {
-        $mollie_test_api = $edd_options['test_api_key'];
-        $mollie_live_api = $edd_options['live_api_key'];
-
-        // Load Mollie API with autoloader
-
-        require ('Mollie/API/Autoloader.php');
-
-        $mollie = new Mollie_API_Client;
-
-        // Check if test mode is set to determine what API Key to use for payment object.
-        if (edd_is_test_mode()) {
-            $mollie->setApiKey($mollie_test_api);
-        } else {
-            $mollie->setApiKey($mollie_live_api);
-        }
-    } catch (Mollie_API_Exception $e) {
-            echo "API call failed: " . htmlspecialchars($e->getMessage());
-    }
-    return $mollie;
-}
 
 /**
  * Add an IDEAL icon for the EDD settings screen
@@ -155,8 +134,11 @@ if (! function_exists('gateway_mollie_payment_processing')) {
             }
 
             // Get payment URL to process payment
-
-            $payment_redirect = $payment->getPaymentUrl();
+            try {
+                $payment_redirect = $payment->getPaymentUrl();
+            } catch (Mollie_API_Exception $e) {
+                echo "API call failed: " . htmlspecialchars($e->getMessage());
+            }
 
             edd_empty_cart();
 
@@ -177,38 +159,16 @@ if (! function_exists('gateway_mollie_payment_processing')) {
  * @return void
  */
 
-function mollie_gateway_listener()
-{
-    global $edd_options;
-  // Mollie IPN
-    if (isset( $_POST["id"] )) {
-        do_action('edd_mollie_verify_ipn');
-    }
-}
-add_action('init', 'mollie_gateway_listener');
+//function mollie_gateway_listener()
+//{
+//    global $edd_options;
+//  // Mollie IPN
+//    if (isset( $_POST["id"] )) {
+//        do_action('edd_mollie_verify_ipn');
+//    }
+//}
+//add_action('init', 'mollie_gateway_listener');
 
-
-/**
- * @since 1.0.1
- * Send users to the failed transaction page.
- * @param array $args
- */
-function edd_send_to_failed_page($args = array() ) {
-    $redirect = edd_get_failed_transaction_uri();
-
-    if ( ! empty( $args ) ) {
-        // Check for backward compatibility
-        if ( is_string( $args ) )
-            $args = str_replace( '?', '', $args );
-
-        $args = wp_parse_args( $args );
-
-        $redirect = add_query_arg( $args, $redirect );
-    }
-
-    wp_redirect( apply_filters( 'edd_send_to_failed_page', $redirect, $args ) );
-    edd_die();
-}
 
 /**
  * @since 1.0.1
@@ -217,65 +177,20 @@ function edd_send_to_failed_page($args = array() ) {
  * lookup their order status. After this, redirect
  * to succes or failed page
  */
-function check_for_mollie_payments() {
-    if (!isset($_GET["payment-notification"])) {
-        return;
-    }
-    $id = $_GET["payment-id"];
-
-    $params = array(
-        'payment-notification'  => $_GET["payment-notification"],
-        'payment-id'            => $_GET["payment-id"]
-    );
-
-    mollie_payments_redirect($params);
-}
-add_action('init', 'check_for_mollie_payments');
-
-/**
- * @since 1.0.1
- * Take the order ID from the return URL
- * and find the order in EDD. If the order is
- * complete, redirect the user to the success
- * page. Otherwise send the user to the failed page.
- * @param $id
- */
-function mollie_payments_redirect($params)
-{
-    global $edd_options;
-    $mollie_trans_id = '';
-    $mollie = '';
-    $payment = '';
-    $paid = false;
-
-    if(!is_array($params)) {
-        return;
-    }
-    if(count($params) !== 2) {
-        return;
-    }
-
-    $mollie_payment_id = $params['payment-id'];
-
-    $status = get_post_status($mollie_payment_id);
-    $mollie_trans_id = edd_get_payment_transaction_id($mollie_payment_id);
-    $mollie = mollie_api_connect();
-    try {
-        $payment = $mollie->payments->get($mollie_trans_id);
-        if($payment->isPaid()) {
-            edd_send_to_success_page();
-        } elseif($payment->isOpen()) {
-            edd_send_to_failed_page();
-        } elseif($payment->isCancelled()) {
-            edd_send_to_failed_page();
-        } else {
-            edd_send_to_failed_page();
-        }
-    } catch (Mollie_API_Exception $e) {
-        echo "API call failed: " . htmlspecialchars($e->getMessage());
-    }
-
-}
+//function check_for_mollie_payments() {
+//    if (!isset($_GET["payment-notification"])) {
+//        return;
+//    }
+//    $id = $_GET["payment-id"];
+//
+//    $params = array(
+//        'payment-notification'  => $_GET["payment-notification"],
+//        'payment-id'            => $_GET["payment-id"]
+//    );
+//
+//    mollie_payments_redirect($params);
+//}
+//add_action('init', 'check_for_mollie_payments');
 
 /**
  * Process the Mollie Payment notification
@@ -291,18 +206,8 @@ function mollie_payments_redirect($params)
 // Process the payment status notification
 function sw_edd_process_mollie_ipn()
 {
-    global $edd_options;
-
     $mollie = mollie_api_connect();
     try {
-
-        //Check if test mode is set to determine what API Key to use for Mollie API call.
-        if (edd_is_test_mode()) {
-            $mollie->setApiKey($mollie_test_api);
-        } else {
-            $mollie->setApiKey($mollie_live_api);
-        }
-
         // Get the id from the Mollie payment status update
             $payment = $mollie->payments->get($id);
             $edd_payment = $payment->metadata->order_id;
@@ -336,9 +241,7 @@ function sw_edd_process_mollie_ipn()
     } catch (Mollie_API_Exception $e) {
         header("HTTP/1.0 500 Internal Server Error");
     }
-
 }
-
 add_action('edd_mollie_verify_ipn', 'sw_edd_process_mollie_ipn');
 
 function sw_edd_add_settings($settings)
