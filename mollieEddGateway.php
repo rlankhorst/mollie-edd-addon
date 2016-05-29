@@ -3,10 +3,12 @@
 Plugin Name: Easy Digital Downloads - Mollie Gateway
 Plugin URL: https://github.com/sanderdewijs/mollie-edd-addon
 Description: A simple Mollie payment gateway addon for Easy Digital Downloads Wordpress plugin
-Version: 1.0
+Version: 1.0.1
 Author: Sander de Wijs
 Author URI: http://www.degrinthorst.nl
 */
+
+define( 'EDD_MOLLIE_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 
 /**
  * Register the Mollie gateway in EDD
@@ -15,6 +17,10 @@ Author URI: http://www.degrinthorst.nl
  * @param $gateways Array Array of gateways registered in EDD
  * @return $gateways Array updated gateways array
  */
+
+require('inc/class_edd_mollie_plugin.php');
+//require('inc/mollie-edd-functions.php');
+
 function sw_edd_register_gateway($gateways)
 {
     $gateways['mollie_gateway'] = array(
@@ -65,11 +71,9 @@ if (! function_exists('gateway_mollie_payment_processing')) {
     function gateway_mollie_payment_processing($purchase_data)
     {
         global $edd_options;
-
+        $payment = array();
         // Setup variables for payment processing
-        $plugin_url = plugin_dir_url(__FILE__);
-        $mollie_test_api = $edd_options['test_api_key'];
-        $mollie_live_api = $edd_options['live_api_key'];
+//        $plugin_url = plugin_dir_url(__FILE__);
 
         $cart_summary = edd_get_purchase_summary($purchase_data, false);
 
@@ -93,37 +97,23 @@ if (! function_exists('gateway_mollie_payment_processing')) {
         // Check if payment is EDD payment
         if (! $edd_payment) {
         // Record the error
-            edd_record_gateway_error(__('Payment Error', 'edd'), sprintf(__('Payment creation failed before sending buyer to IDEAL. Payment data: %s', 'edd'), json_encode($payment_data)), $payment);
+            edd_record_gateway_error(__('Payment Error', 'edd'), sprintf(__('Payment creation failed before sending buyer to IDEAL. Payment data: %s', 'edd'), json_encode($edd_payment)), $edd_payment);
         // Problems? send back to checkout
             edd_send_back_to_checkout('?payment-mode=' . $purchase_data['post_data']['edd-gateway']);
         }  else {
-            // Only send to Mollie if the pending payment is created successfully
-            // Get the success url
+            // y send to Mollie if the pending payment is created successfully
+            // Get the return url
+            $home_url = get_home_url() . '/';
             $return_url = add_query_arg(array(
-                    'payment-confirmation' => 'mollie_gateway',
+                    'payment-notification' => 'mollie-gateway',
                     'payment-id' => $edd_payment
 
-                ), get_permalink($edd_options['success_page']));
-
+                ), $home_url);
+                $gateway = new Mollie_EDD();
             // Create a Mollie Payment object
+                $mollie = $gateway->mollie_api_connect();
             try {
-                $mollie_test_api = $edd_options['test_api_key'];
-                $mollie_live_api = $edd_options['live_api_key'];
-
-                // Load Mollie API with autoloader
-
-                require ('Mollie/API/Autoloader.php');
-
-                $mollie = new Mollie_API_Client;
-
-                // Check if test mode is set to determine what API Key to use for payment object.
-                if (edd_is_test_mode()) {
-                        $mollie->setApiKey($mollie_test_api);
-                } else {
-                        $mollie->setApiKey($mollie_live_api);
-                }
-
-                // Create webhook URL for Mollie. This way the client doesn't need to 
+                // Create webhook URL for Mollie. This way the client doesn't need to
                 // set a webhook URL in Mollie website profile
                 $base_url = get_site_url();
                 $webhookUrl = $base_url . '/?edd-listener=MOLLIE';
@@ -131,7 +121,6 @@ if (! function_exists('gateway_mollie_payment_processing')) {
                 $payment = $mollie->payments->create(array(
                 'amount' => $purchase_data['price'],
                 'description' => $cart_summary,
-                'method' => 'ideal',
                 'redirectUrl' => $return_url,
                 'webhookUrl' => $webhookUrl,
                 'metadata' => array(
@@ -147,116 +136,53 @@ if (! function_exists('gateway_mollie_payment_processing')) {
             }
 
             // Get payment URL to process payment
-            $payment_redirect = $payment->getPaymentUrl();
+            try {
+                $payment_redirect = $payment->getPaymentUrl();
+            } catch (Mollie_API_Exception $e) {
+                echo "API call failed: " . htmlspecialchars($e->getMessage());
+            }
 
             edd_empty_cart();
 
             // Redirect to Mollie
-            header("Location: " . $payment_redirect);
+            wp_redirect($payment_redirect);
             exit;
         }
     }
 
     add_action('edd_gateway_mollie_gateway', 'gateway_mollie_payment_processing');
 }
-
-/**
- * Listen for a Mollie POST with the payment ID and call the processing function
- *
- * @since 1.0
- * @global $edd_options Array of all the EDD Options
- * @return void
- */
-
-function mollie_gateway_listener()
-{
-    global $edd_options;
-  // Mollie IPN
-    // if (isset( $_POST["id"])) {
-    if (isset( $_POST["id"] )) {
-        do_action('edd_mollie_verify_ipn');
-    }
-}
-add_action('init', 'mollie_gateway_listener');
-
 /**
  * Process the Mollie Payment notification
  * Use the transaction ID to retrieve the payment
  * Update the EDD order payment status
  *
  * @since 1.0
- * @global $edd_options Array of all the EDD Options
- * @return void
+ * @global $edd_options array of all the EDD Options
+ * @return array
  */
 
-
-// Process the payment status notification
-function sw_edd_process_mollie_ipn()
+function check_for_mollie_payments()
 {
-    global $edd_options;
+    if (isset($_GET["payment-notification"])) {
 
-    try {
+        $gateway = new Mollie_EDD();
+        $mollie = $gateway->mollie_api_connect();
+        $mollie_trans_id = edd_get_payment_transaction_id($_GET["payment-id"]);
+        $payment = $mollie->payments->get($mollie_trans_id);
 
-        $mollie_test_api = $edd_options['test_api_key'];
-        $mollie_live_api = $edd_options['live_api_key'];
-
-    // Load Mollie API with autoloader
-
-        require ('Mollie/API/Autoloader.php');
-
-        $mollie = new Mollie_API_Client;
-        $payment = "";
-        $id = $_POST["id"];
-
-    } catch (Mollie_API_Exception $e) {
-            echo "API call failed: " . htmlspecialchars($e->getMessage());
+        $params = array(
+            'gateway'  => 'mollie',
+            'payment-id'            => $_GET["payment-id"],
+            'payment-status'        => $payment->status,
+            'mollie-id'             => $payment->id,
+        );
+        $gateway->mollie_payments_redirect($params);
+    } else {
+        return;
     }
-    try {
-
-        //Check if test mode is set to determine what API Key to use for Mollie API call.
-        if (edd_is_test_mode()) {
-            $mollie->setApiKey($mollie_test_api);
-        } else {
-            $mollie->setApiKey($mollie_live_api);
-        }
-
-        // Get the id from the Mollie payment status update
-            $payment = $mollie->payments->get($id);
-            $edd_payment = $payment->metadata->order_id;
-
-            // Use the edd_get_purchase_id_by_key() function to retrieve the order ID
-            // with the transaction id stored in the Mollie Payment object metadata
-            $order_id = edd_get_purchase_id_by_key($edd_payment);
-  
-        if ($payment->isPaid()) {
-            // If payment status is Paid, complete the order  
-            edd_update_payment_status($order_id, $new_status = 'publish');
-            header("HTTP/1.0 200 Ok");
-        } elseif ($payment->isOpen()) {
-            // If payment status is Open, set the order status to failed  
-            edd_record_gateway_error( 
-                'Payment Not Paid', 
-                sprintf( __( 'A payment was not processed: ', 'edd' ), json_encode( $payment ) ) 
-            );
-            edd_update_payment_status($order_id, $new_status = 'failed');
-            $fail = true;
-        } elseif ($payment->isCancelled()) {
-            // If payment status is cancelled, set the order status to revoked
-            edd_record_gateway_error( 
-                'Payment Cancelled', 
-                sprintf( __( 'A payment was cancelled: ', 'edd' ), json_encode( $payment ) ) 
-            );
-            edd_update_payment_status($order_id, $new_status = 'revoked');
-        } elseif ($fail !== false) {
-            return;
-        }
-    } catch (Mollie_API_Exception $e) {
-        header("HTTP/1.0 500 Internal Server Error");
-    }
-
 }
-
-add_action('edd_mollie_verify_ipn', 'sw_edd_process_mollie_ipn');
+add_action('init', 'check_for_mollie_payments');
 
 function sw_edd_add_settings($settings)
 {
