@@ -25,9 +25,9 @@
  * DAMAGE.
  *
  * @license     Berkeley Software Distribution License (BSD-License 2) http://www.opensource.org/licenses/bsd-license.php
- * @author      Mollie B.V. <info@mollie.nl>
+ * @author      Mollie B.V. <info@mollie.com>
  * @copyright   Mollie B.V.
- * @link        https://www.mollie.nl
+ * @link        https://www.mollie.com
  */
 class Mollie_API_Object_Payment
 {
@@ -67,6 +67,31 @@ class Mollie_API_Object_Payment
 	const STATUS_REFUNDED  = "refunded";
 
 	/**
+	 * Some payment methods provide your customers with the ability to dispute payments which could
+	 * ultimately lead to a chargeback.
+	 */
+	const STATUS_CHARGED_BACK = "charged_back";
+
+	/**
+	 * The payment has failed.
+	 */
+	const STATUS_FAILED  = "failed";
+
+	/**
+	 * Recurring types.
+	 *
+	 * @see https://www.mollie.com/en/docs/recurring
+	 */
+	const RECURRINGTYPE_NONE      = NULL;
+	const RECURRINGTYPE_FIRST     = "first";
+	const RECURRINGTYPE_RECURRING = "recurring";
+
+	/**
+	 * @var string
+	 */
+	public $resource;
+
+	/**
 	 * Id of the payment (on the Mollie platform).
 	 *
 	 * @var string
@@ -89,11 +114,22 @@ class Mollie_API_Object_Payment
 
 	/**
 	 * The amount of the payment that has been refunded to the consumer, in EURO with 2 decimals. This field will be
-	 * NULL if the payment is not refunded.
+	 * NULL if the payment can not be refunded.
 	 *
-	 * @var float|NULL
+	 * @var float|null
 	 */
 	public $amountRefunded;
+
+	/**
+	 * The amount of a refunded payment that can still be refunded, in EURO with 2 decimals. This field will be
+	 * NULL if the payment can not be refunded.
+	 *
+	 * For some payment methods this amount can be higher than the payment amount. This is possible to reimburse
+	 * the costs for a return shipment to your customer for example.
+	 *
+	 * @var float|null
+	 */
+	public $amountRemaining;
 
 	/**
 	 * Description of the payment that is shown to the customer during the payment, and
@@ -117,6 +153,14 @@ class Mollie_API_Object_Payment
 	 * @var string
 	 */
 	public $status = self::STATUS_OPEN;
+
+	/**
+	 * The period after which the payment will expire in ISO-8601 format.
+	 *
+	 * @example P12DT11H30M45S (12 days, 11 hours, 30 minutes and 45 seconds)
+	 * @var string|null
+	 */
+	public $expiryPeriod;
 
 	/**
 	 * Date and time the payment was created in ISO-8601 format.
@@ -146,6 +190,52 @@ class Mollie_API_Object_Payment
 	 * @var string|null
 	 */
 	public $expiredDatetime;
+
+	/**
+	 * The profile ID this payment belongs to.
+	 *
+	 * @example pfl_xH2kP6Nc6X
+	 * @var string
+	 */
+	public $profileId;
+
+	/**
+	 * The customer ID this payment is performed by.
+	 *
+	 * @example cst_51EkUqla3
+	 * @var string|null
+	 */
+	public $customerId;
+
+	/**
+	 * Either "first", "recurring", or NULL for regular payments.
+	 *
+	 * @var string|null
+	 */
+	public $recurringType;
+
+	/**
+	 * The mandate ID this payment is performed with.
+	 *
+	 * @example mdt_pXm1g3ND
+	 * @var string|null
+	 */
+	public $mandateId;
+
+	/**
+	 * The subscription ID this payment belongs to.
+	 *
+	 * @example sub_rVKGtNd6s3
+	 * @var string|null
+	 */
+	public $subscriptionId;
+
+	/**
+	 * The locale used for this payment.
+	 *
+	 * @var string|null
+	 */
+	public $locale;
 
 	/**
 	 * During creation of the payment you can set custom metadata that is stored with
@@ -232,6 +322,16 @@ class Mollie_API_Object_Payment
 	}
 
 	/**
+	 * Is this payment charged back?
+	 *
+	 * @return bool
+	 */
+	public function isChargedBack ()
+	{
+		return $this->status == self::STATUS_CHARGED_BACK;
+	}
+
+	/**
 	 * Get the payment URL where the customer can complete the payment.
 	 *
 	 * @return string|null
@@ -244,5 +344,52 @@ class Mollie_API_Object_Payment
 		}
 
 		return $this->links->paymentUrl;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function canBeRefunded ()
+	{
+		return $this->amountRemaining !== NULL;
+	}
+
+	/**
+	 * @return bool
+	 */
+	public function canBePartiallyRefunded ()
+	{
+		return $this->canBeRefunded();
+	}
+
+	/**
+	 * Get the amount that is already refunded
+	 *
+	 * @return float
+	 */
+	public function getAmountRefunded ()
+	{
+		if ($this->amountRefunded)
+		{
+			return floatval($this->amountRefunded);
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Get the remaining amount that can be refunded. For some payment methods this amount can be higher than
+	 * the payment amount. This is possible to reimburse the costs for a return shipment to your customer for example.
+	 *
+	 * @return float
+	 */
+	public function getAmountRemaining ()
+	{
+		if ($this->amountRemaining)
+		{
+			return floatval($this->amountRemaining);
+		}
+
+		return 0;
 	}
 }

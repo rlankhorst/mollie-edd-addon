@@ -25,19 +25,19 @@
  * DAMAGE.
  *
  * @license     Berkeley Software Distribution License (BSD-License 2) http://www.opensource.org/licenses/bsd-license.php
- * @author      Mollie B.V. <info@mollie.nl>
+ * @author      Mollie B.V. <info@mollie.com>
  * @copyright   Mollie B.V.
- * @link        https://www.mollie.nl
+ * @link        https://www.mollie.com
  *
- * @method Mollie_API_Object_Payment_Refund[]|Mollie_API_Object_List all($offset = 0, $limit = 0)
- * @method Mollie_API_Object_Payment_Refund get($resource_id)
+ * @method Mollie_API_Object_Payment_Refund[]|Mollie_API_Object_List all($offset = 0, $limit = 0, array $filters = array())
+ * @method Mollie_API_Object_Payment_Refund get($resource_id, array $filters = array())
  */
 class Mollie_API_Resource_Payments_Refunds extends Mollie_API_Resource_Base
 {
 	/**
 	 * @var string
 	 */
-	private $payment_id;
+	protected $resource_path = "payments_refunds";
 
 	/**
 	 * @return Mollie_API_Object_Method
@@ -45,25 +45,5 @@ class Mollie_API_Resource_Payments_Refunds extends Mollie_API_Resource_Base
 	protected function getResourceObject ()
 	{
 		return new Mollie_API_Object_Payment_Refund;
-	}
-
-	/**
-	 * @return string
-	 */
-	protected function getResourceName ()
-	{
-		return "payments/" . urlencode($this->payment_id) . "/refunds";
-	}
-
-	/**
-	 * Set the resource to use a certain payment. Use this method before performing a get() or all() call.
-	 *
-	 * @param Mollie_API_Object_Payment $payment
-	 * @return self
-	 */
-	public function with(Mollie_API_Object_Payment $payment)
-	{
-		$this->payment_id = $payment->id;
-		return $this;
 	}
 }
