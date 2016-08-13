@@ -97,7 +97,7 @@ class Mollie_EDD {
      * and find the order in EDD. If the order is
      * complete, redirect the user to the success
      * page. Otherwise send the user to the failed page.
-     * @param $params
+     * @param array $params
      */
     public function mollie_payments_redirect($params)
     {

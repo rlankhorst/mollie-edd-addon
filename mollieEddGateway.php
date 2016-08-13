@@ -53,7 +53,7 @@ add_action('edd_mollie_gateway_cc_form', 'sw_edd_mollie_gateway_cc_form');
 function mollie_payment_icon($icons)
 {
     $plugin_url = plugin_dir_url(__FILE__);
-    $icons[$plugin_url . 'assets/img/iDEAL-klein.gif'] = 'IDEAL';
+    $icons[$plugin_url . 'assets/img/mollie.png'] = 'Mollie Payments';
     return $icons;
 }
 
@@ -178,8 +178,6 @@ function check_for_mollie_payments()
             'mollie-id'             => $payment->id,
         );
         $gateway->mollie_payments_redirect($params);
-    } else {
-        return;
     }
 }
 add_action('init', 'check_for_mollie_payments');
